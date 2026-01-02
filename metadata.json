@@ -1,5 +1,5 @@
 {
-  "name": "Visionary AI Studio",
+  "name": "Visionary Pro",
   "description": "A high-performance image generation and editing suite powered by Gemini models. Create stunning visuals from text, or upload existing images to transform them using advanced AI capabilities.",
   "requestFramePermissions": [
     "camera"

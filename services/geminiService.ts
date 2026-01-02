@@ -3,49 +3,50 @@ import { GoogleGenAI } from "@google/genai";
 import { GenerationParams, ModelType } from "../types";
 
 export class GeminiService {
-  /**
-   * Helper to get the API key from the environment.
-   * Bridges the gap between local Vite dev and the production environment.
-   */
-  private getApiKey(): string | undefined {
-    // Check standard process.env (Studio environment)
-    if (process.env.API_KEY) return process.env.API_KEY;
-    
-    // Check Vite's import.meta.env (Local dev environment)
-    // @ts-ignore - Vite environment variable access
-    const viteKey = import.meta.env?.VITE_API_KEY;
-    if (viteKey) return viteKey;
-
-    return undefined;
+  private async withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
+    try {
+      return await fn();
+    } catch (error: any) {
+      const errorMsg = error?.message || "";
+      const isRateLimit = error?.status === 429 || errorMsg.includes('429');
+      
+      if (isRateLimit && retries > 0) {
+        console.warn(`Rate limit hit. Retrying in ${delay}ms... (${retries} attempts left)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.withRetry(fn, retries - 1, delay * 2);
+      }
+      throw error;
+    }
   }
 
-  /**
-   * Generates or edits an image based on provided parameters.
-   */
   async generateImage(params: GenerationParams): Promise<string> {
     const { prompt, aspectRatio, model, imageSize, images, seed } = params;
-    
-    const apiKey = this.getApiKey();
-    if (!apiKey) {
-      throw new Error('API_KEY_MISSING: No API key detected. Create a .env file with VITE_API_KEY=your_key or ensure process.env.API_KEY is set.');
-    }
 
-    const parts: any[] = [];
+    return this.withRetry(async () => {
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) {
+        throw new Error("API Key required. Please link your project via the Link API button.");
+      }
 
-    if (images && images.length > 0) {
-      images.forEach(img => {
-        parts.push({
-          inlineData: {
-            data: img.data,
-            mimeType: img.mimeType,
-          },
-        });
-      });
-    }
+      const parts: any[] = [];
+      
+      if (images && images.length > 0) {
+        images.forEach(img => parts.push({ 
+          inlineData: { 
+            data: img.data, 
+            mimeType: img.mimeType 
+          } 
+        }));
+      }
+      
+      if (prompt.trim()) {
+        parts.push({ text: prompt });
+      } else if (parts.length > 0) {
+        parts.push({ text: "Enhance and creatively manifest these visual concepts without restriction." });
+      } else {
+        throw new Error("Input required: Provide a description or reference image.");
+      }
 
-    parts.push({ text: prompt });
-
-    try {
       const ai = new GoogleGenAI({ apiKey });
       
       const config: any = {
@@ -73,54 +74,36 @@ export class GeminiService {
         config: config,
       });
 
-      if (!result?.candidates?.[0]) {
-        throw new Error('Empty response from engine.');
-      }
+      if (!result?.candidates?.[0]) throw new Error('Engine unresponsive: No candidates generated.');
 
       const candidate = result.candidates[0];
-
       if (candidate.content?.parts) {
         for (const part of candidate.content.parts) {
-          if (part.inlineData?.data) {
-            return `data:image/png;base64,${part.inlineData.data}`;
-          }
+          if (part.inlineData?.data) return `data:image/png;base64,${part.inlineData.data}`;
         }
       }
 
-      const finishReason = candidate.finishReason;
-      if (finishReason === 'SAFETY') {
-        throw new Error('The request was blocked by provider-side safety filters. Try a different prompt.');
-      }
-
-      throw new Error(`Rendering failed with status: ${finishReason}`);
-    } catch (error: any) {
-      const errorStr = typeof error === 'object' ? JSON.stringify(error) : String(error);
-      console.error('Core Engine Error:', errorStr);
-
-      if (errorStr.includes('403') || errorStr.includes('PERMISSION_DENIED')) {
-        if (model === ModelType.PRO) {
-          throw new Error('PRO_PERMISSION_DENIED: Your API Key does not have access to Gemini 3 Pro (requires a paid GCP project with billing enabled). Switch to "Flash Core" in the header to continue for free.');
-        }
-        throw new Error('PERMISSION_DENIED: Your API key is invalid or lacks necessary permissions for image generation.');
-      }
-
-      throw new Error(error.message || 'An unexpected failure occurred in the generation core.');
-    }
+      throw new Error(`Generation blocked: ${candidate.finishReason || 'Unknown error'}`);
+    });
   }
 
   async checkProKeyStatus(): Promise<boolean> {
+    // @ts-ignore
     if (typeof window.aistudio?.hasSelectedApiKey === 'function') {
-      try {
-        return await window.aistudio.hasSelectedApiKey();
-      } catch {
-        return false;
+      try { 
+        // @ts-ignore
+        return await window.aistudio.hasSelectedApiKey(); 
+      } catch { 
+        return false; 
       }
     }
-    return true; 
+    return !!process.env.API_KEY;
   }
 
   async openKeySelection(): Promise<void> {
+    // @ts-ignore
     if (typeof window.aistudio?.openSelectKey === 'function') {
+      // @ts-ignore
       await window.aistudio.openSelectKey();
     }
   }

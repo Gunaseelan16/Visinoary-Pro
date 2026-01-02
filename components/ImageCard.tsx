@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { Icons } from '../constants';
+import { SparklesIcon, DownloadIcon, TrashIcon } from '../constants';
 import { GeneratedImage } from '../types';
 
 interface ImageCardProps {
@@ -32,31 +31,31 @@ export const ImageCard: React.FC<ImageCardProps> = ({ image, onDelete, onDownloa
         </p>
         <div className="mt-6 flex items-center justify-between">
           <span className="text-[11px] uppercase tracking-[0.2em] text-zinc-600 font-black">
-            {image.model.split('-')[2]} • {image.aspectRatio}
+            {image.aspectRatio}
           </span>
           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
             {onEvolve && (
               <button 
-                onClick={() => onEvolve(image)}
+                onClick={(e) => { e.stopPropagation(); onEvolve(image); }}
                 className="p-2.5 rounded-xl bg-white/5 text-zinc-500 hover:text-white hover:bg-indigo-600 transition-all shadow-lg"
-                title="Evolve as DNA"
+                title="Create variation"
               >
-                <Icons.Sparkles />
+                <SparklesIcon />
               </button>
             )}
             <button 
-              onClick={() => onDownload(image.url, image.prompt)}
+              onClick={(e) => { e.stopPropagation(); onDownload(image.url, image.prompt); }}
               className="p-2.5 rounded-xl bg-white/5 text-zinc-500 hover:text-white hover:bg-blue-600 transition-all shadow-lg"
-              title="Download Master"
+              title="Save Image"
             >
-              <Icons.Download />
+              <DownloadIcon />
             </button>
             <button 
-              onClick={() => onDelete(image.id)}
+              onClick={(e) => { e.stopPropagation(); onDelete(image.id); }}
               className="p-2.5 rounded-xl bg-white/5 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 transition-all shadow-lg"
-              title="Purge"
+              title="Delete"
             >
-              <Icons.Trash />
+              <TrashIcon />
             </button>
           </div>
         </div>
