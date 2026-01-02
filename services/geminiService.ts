@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { GenerationParams, ModelType } from "../types";
 
@@ -23,13 +22,12 @@ export class GeminiService {
     const { prompt, aspectRatio, model, imageSize, images, seed } = params;
 
     return this.withRetry(async () => {
+      // Per instructions: Obtain API key exclusively from process.env.API_KEY
       const apiKey = process.env.API_KEY;
-      if (!apiKey) {
-        throw new Error("API Key required. Please link your project via the Link API button.");
-      }
-
+      
       const parts: any[] = [];
       
+      // Handle Image-to-Image / Editing
       if (images && images.length > 0) {
         images.forEach(img => parts.push({ 
           inlineData: { 
@@ -39,6 +37,7 @@ export class GeminiService {
         }));
       }
       
+      // Handle prompt text or default instruction for image-only input
       if (prompt.trim()) {
         parts.push({ text: prompt });
       } else if (parts.length > 0) {
@@ -47,6 +46,7 @@ export class GeminiService {
         throw new Error("Input required: Provide a description or reference image.");
       }
 
+      // Initialize AI instance right before usage as per instructions
       const ai = new GoogleGenAI({ apiKey });
       
       const config: any = {
@@ -54,6 +54,7 @@ export class GeminiService {
           aspectRatio: aspectRatio,
           ...(model === ModelType.PRO && imageSize ? { imageSize: imageSize } : {}),
         },
+        // Unrestricted generation: Set all safety thresholds to BLOCK_NONE
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -64,6 +65,7 @@ export class GeminiService {
         ...(seed !== undefined ? { seed: seed } : {}),
       };
 
+      // Enable Google Search grounding for Gemini 3 Pro
       if (model === ModelType.PRO) {
         config.tools = [{ google_search: {} }];
       }

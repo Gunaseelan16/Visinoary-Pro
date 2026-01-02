@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { ASPECT_RATIOS, LogoIcon, SparklesIcon, UploadIcon, HistoryIcon, TrashIcon } from './constants';
 import { geminiService } from './services/geminiService';
@@ -96,12 +95,12 @@ const App: React.FC = () => {
     setIsGenerating(true);
 
     try {
-      // Direct API check for Pro models or missing keys
+      // Handle the high-quality model or missing key case
       if (selectedModel === ModelType.PRO || !process.env.API_KEY) {
         const hasKey = await geminiService.checkProKeyStatus();
         if (!hasKey) {
           await geminiService.openKeySelection();
-          // Assuming success as per guidelines, but if it truly fails, the catch block handles it.
+          // Assume success after trigger as per instructions
         }
       }
 
@@ -125,7 +124,7 @@ const App: React.FC = () => {
 
       setImages(prev => [newImage, ...prev]);
 
-      // Auto-save logic
+      // Simple click to trigger auto-download
       const link = document.createElement('a');
       link.href = resultUrl;
       link.download = `Visionary_${newImage.id}.png`;
@@ -138,9 +137,9 @@ const App: React.FC = () => {
     } catch (err: any) {
       const msg = err?.message || 'Synthesis engine error.';
       
-      // Handle missing API Key or reset project selection
-      if (msg.includes('API Key must be set') || msg.includes('API Key required') || msg.includes('not found')) {
-        setError('Project connection required. Please link your API key.');
+      // If key is truly missing at runtime or specific error occurs
+      if (msg.includes('API Key must be set') || msg.includes('Requested entity was not found')) {
+        setError('Connection reset. Please verify your project link.');
         await geminiService.openKeySelection();
       } else if (msg.includes('429')) {
         setError('Rate limit hit. Cooling down engines...');
@@ -201,12 +200,12 @@ const App: React.FC = () => {
             
             <div className="space-y-4">
               <label className="text-[11px] font-black text-zinc-400 uppercase tracking-[0.3em] flex items-center gap-3">
-                <SparklesIcon /> Visual Intent
+                <SparklesIcon /> Concept Intent
               </label>
               <textarea 
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="What shall the engine manifest?"
+                placeholder="Describe your manifestation..."
                 className="w-full bg-black/40 border border-white/10 rounded-[2rem] p-8 text-base text-zinc-100 placeholder:text-zinc-800 focus:ring-4 focus:ring-blue-600/20 outline-none min-h-[160px] transition-all resize-none leading-relaxed shadow-inner"
               />
             </div>
@@ -214,7 +213,7 @@ const App: React.FC = () => {
             <div className="space-y-5">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-black text-zinc-400 uppercase tracking-[0.3em] flex items-center gap-3">
-                  <UploadIcon /> Neural References
+                  <UploadIcon /> Media Input
                 </label>
                 {uploadedImages.length > 0 && <button onClick={() => setUploadedImages([])} className="text-[10px] text-red-600 uppercase font-black hover:text-red-500">Purge</button>}
               </div>
@@ -226,7 +225,7 @@ const App: React.FC = () => {
                 </div>
                 {uploadedImages.map((img) => (
                   <div key={img.id} className="relative aspect-square rounded-[1.5rem] overflow-hidden group border border-white/10 shadow-lg">
-                    <img src={`data:${img.mimeType};base64,${img.data}`} className="w-full h-full object-cover" alt="Source" />
+                    <img src={`data:${img.mimeType};base64,${img.data}`} className="w-full h-full object-cover" alt="Uploaded source" />
                     <button onClick={() => setUploadedImages(prev => prev.filter(x => x.id !== img.id))} className="absolute inset-0 bg-red-600/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"><TrashIcon /></button>
                   </div>
                 ))}
@@ -278,11 +277,11 @@ const App: React.FC = () => {
             <div className="space-y-5 text-xs text-zinc-600 font-bold">
               <div className="flex items-center gap-4">
                 <div className={`w-2 h-2 rounded-full ${cooldownSeconds > 0 ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`}></div>
-                <p>Engine: {selectedModel === ModelType.FLASH ? 'Gemini 2.5 Unrestricted' : 'Gemini 3.0 Ultra'}</p>
+                <p>Engine: {selectedModel === ModelType.FLASH ? 'Gemini 2.5 Active' : 'Gemini 3.0 Ultra'}</p>
               </div>
               <div className="flex items-center gap-4">
                 <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
-                <p>Status: Systems Optimized</p>
+                <p>Grounding: Active (Unrestricted)</p>
               </div>
             </div>
           </section>
@@ -291,7 +290,7 @@ const App: React.FC = () => {
         <section className="flex-1 flex flex-col gap-10 min-w-0">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <h2 className="text-4xl font-black uppercase tracking-tighter flex items-center gap-5"><HistoryIcon /> Studio Vault</h2>
-            <div className="bg-white/5 border border-white/10 px-6 py-2.5 rounded-full text-[11px] font-black uppercase tracking-widest text-zinc-500">{filteredImages.length} Manifestations</div>
+            <div className="bg-white/5 border border-white/10 px-6 py-2.5 rounded-full text-[11px] font-black uppercase tracking-widest text-zinc-500">{filteredImages.length} Artifacts</div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-12 pb-48">
@@ -299,7 +298,7 @@ const App: React.FC = () => {
               <div className="bg-white/[0.03] rounded-[3rem] aspect-square flex flex-col items-center justify-center space-y-10 border border-blue-600/30 shimmer order-first">
                 <div className="w-16 h-16 border-4 border-zinc-900 border-t-blue-600 rounded-full animate-spin"></div>
                 <div className="text-center">
-                  <p className="text-sm font-black uppercase tracking-[0.6em] text-white animate-pulse">Synthesizing...</p>
+                  <p className="text-sm font-black uppercase tracking-[0.6em] text-white animate-pulse">Compiling...</p>
                 </div>
               </div>
             )}
@@ -323,7 +322,7 @@ const App: React.FC = () => {
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
             <div className="bg-white/[0.02] p-4 rounded-[3.5rem] shadow-[0_0_150px_rgba(37,99,235,0.2)] border border-white/10">
-              <img src={selectedPreview.url} className="max-h-[70vh] w-auto rounded-[3rem] shadow-2xl" alt="Preview" />
+              <img src={selectedPreview.url} className="max-h-[70vh] w-auto rounded-[3rem] shadow-2xl" alt="Preview artifact" />
             </div>
             <div className="mt-12 text-center max-w-2xl">
               <p className="text-sm font-black uppercase tracking-[0.4em] text-zinc-500 mb-8">{selectedPreview.prompt}</p>
