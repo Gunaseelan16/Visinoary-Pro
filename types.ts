@@ -30,10 +30,17 @@ export interface GenerationParams {
   seed?: number;
 }
 
+// Global declaration augmentation to support process.env.API_KEY
+// This explicitly tells TypeScript that 'process' exists globally.
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
       API_KEY: string;
+      [key: string]: string | undefined;
+    }
+    interface Process {
+      env: ProcessEnv;
     }
   }
+  var process: NodeJS.Process;
 }
