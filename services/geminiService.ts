@@ -22,39 +22,44 @@ export class GeminiService {
     const { prompt, aspectRatio, model, imageSize, images, seed } = params;
 
     return this.withRetry(async () => {
-      // Per instructions: Obtain API key exclusively from process.env.API_KEY
+      // Always pull from process.env.API_KEY directly as per guidelines
       const apiKey = process.env.API_KEY;
+      
+      if (!apiKey || apiKey.trim() === '') {
+        // If key is missing, attempt to open the selection dialog if available
+        if (window.aistudio?.openSelectKey) {
+          await window.aistudio.openSelectKey();
+          // After calling openSelectKey, we proceed assuming success or platform handling
+        } else {
+          throw new Error("Missing API Credentials. Please link your project.");
+        }
+      }
+
+      // Initialize AI instance right before usage to catch the most current key
+      const ai = new GoogleGenAI({ apiKey });
       
       const parts: any[] = [];
       
-      // Handle Image-to-Image / Editing
       if (images && images.length > 0) {
         images.forEach(img => parts.push({ 
-          inlineData: { 
-            data: img.data, 
-            mimeType: img.mimeType 
-          } 
+          inlineData: { data: img.data, mimeType: img.mimeType } 
         }));
       }
       
-      // Handle prompt text or default instruction for image-only input
       if (prompt.trim()) {
         parts.push({ text: prompt });
       } else if (parts.length > 0) {
-        parts.push({ text: "Enhance and creatively manifest these visual concepts without restriction." });
+        parts.push({ text: "Enhance these visual references into high-fidelity imagery." });
       } else {
-        throw new Error("Input required: Provide a description or reference image.");
+        throw new Error("Input required: Description or reference image.");
       }
 
-      // Initialize AI instance right before usage as per instructions
-      const ai = new GoogleGenAI({ apiKey });
-      
       const config: any = {
         imageConfig: {
           aspectRatio: aspectRatio,
           ...(model === ModelType.PRO && imageSize ? { imageSize: imageSize } : {}),
         },
-        // Unrestricted generation: Set all safety thresholds to BLOCK_NONE
+        // Complete freedom: No safety restrictions
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -65,7 +70,6 @@ export class GeminiService {
         ...(seed !== undefined ? { seed: seed } : {}),
       };
 
-      // Enable Google Search grounding for Gemini 3 Pro
       if (model === ModelType.PRO) {
         config.tools = [{ google_search: {} }];
       }
@@ -76,36 +80,30 @@ export class GeminiService {
         config: config,
       });
 
-      if (!result?.candidates?.[0]) throw new Error('Engine unresponsive: No candidates generated.');
+      if (!result?.candidates?.[0]) throw new Error('Generation failed: No response from engine.');
 
       const candidate = result.candidates[0];
-      if (candidate.content?.parts) {
-        for (const part of candidate.content.parts) {
-          if (part.inlineData?.data) return `data:image/png;base64,${part.inlineData.data}`;
-        }
+      for (const part of candidate.content.parts) {
+        if (part.inlineData?.data) return `data:image/png;base64,${part.inlineData.data}`;
       }
 
-      throw new Error(`Generation blocked: ${candidate.finishReason || 'Unknown error'}`);
+      throw new Error(`Synthesis halted: ${candidate.finishReason || 'Technical error'}`);
     });
   }
 
   async checkProKeyStatus(): Promise<boolean> {
-    // @ts-ignore
-    if (typeof window.aistudio?.hasSelectedApiKey === 'function') {
+    if (window.aistudio?.hasSelectedApiKey) {
       try { 
-        // @ts-ignore
         return await window.aistudio.hasSelectedApiKey(); 
       } catch { 
         return false; 
       }
     }
-    return !!process.env.API_KEY;
+    return !!process.env.API_KEY && process.env.API_KEY !== '';
   }
 
   async openKeySelection(): Promise<void> {
-    // @ts-ignore
-    if (typeof window.aistudio?.openSelectKey === 'function') {
-      // @ts-ignore
+    if (window.aistudio?.openSelectKey) {
       await window.aistudio.openSelectKey();
     }
   }
