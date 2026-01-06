@@ -30,19 +30,29 @@ export interface GenerationParams {
   seed?: number;
 }
 
+/**
+ * Interface definition for the AI Studio key selection utility
+ */
+export interface AIStudio {
+  hasSelectedApiKey: () => Promise<boolean>;
+  openSelectKey: () => Promise<void>;
+}
+
 declare global {
+  // Use any to avoid redeclaration conflicts with platform-injected window.aistudio property
   interface Window {
-    // Fixed: Use 'any' to avoid conflict with the existing 'AIStudio' type provided by the environment.
-    aistudio?: any;
+    aistudio: any;
   }
+
   namespace NodeJS {
     interface ProcessEnv {
       API_KEY: string;
       [key: string]: string | undefined;
     }
+    // Fix: Augment Process to include the cwd method used in build configuration
+    interface Process {
+      env: ProcessEnv;
+      cwd: () => string;
+    }
   }
-  // Fixed: Use 'var' for global process declaration instead of 'const' to resolve augmentation errors with non-module entities.
-  var process: {
-    env: NodeJS.ProcessEnv;
-  };
 }

@@ -46,14 +46,14 @@ export const ImageCard: React.FC<ImageCardProps> = ({ image, onDelete, onDownloa
             <button 
               onClick={(e) => { e.stopPropagation(); onDownload(image.url, image.prompt); }}
               className="p-2.5 rounded-xl bg-white/5 text-zinc-500 hover:text-white hover:bg-blue-600 transition-all shadow-lg"
-              title="Save Image"
+              title="Download image"
             >
               <DownloadIcon />
             </button>
             <button 
               onClick={(e) => { e.stopPropagation(); onDelete(image.id); }}
               className="p-2.5 rounded-xl bg-white/5 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 transition-all shadow-lg"
-              title="Delete"
+              title="Delete image"
             >
               <TrashIcon />
             </button>
