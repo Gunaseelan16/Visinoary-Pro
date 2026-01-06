@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { GenerationParams, ModelType } from "../types";
 
@@ -22,13 +23,13 @@ export class GeminiService {
     const { prompt, aspectRatio, model, imageSize, images, seed } = params;
 
     return this.withRetry(async () => {
+      // Create a new instance right before making an API call to ensure it uses the most up-to-date API key
       const apiKey = process.env.API_KEY;
       
       if (!apiKey || apiKey.trim() === '') {
         throw new Error("API Key Missing: Please ensure the environment is configured correctly.");
       }
 
-      // Create a new GoogleGenAI instance right before making an API call to ensure current key usage
       const ai = new GoogleGenAI({ apiKey });
       const parts: any[] = [];
       
@@ -51,17 +52,24 @@ export class GeminiService {
           aspectRatio: aspectRatio,
           ...(model === ModelType.PRO && imageSize ? { imageSize: imageSize } : {}),
         },
+        // Use standard safety categories provided by the SDK
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+        ],
         ...(seed !== undefined ? { seed: seed } : {}),
       };
 
-      // Ensure googleSearch tool is correctly named and only used with Pro model
       if (model === ModelType.PRO) {
-        config.tools = [{ googleSearch: {} }];
+        // Use google_search tool for gemini-3-pro-image-preview
+        config.tools = [{ google_search: {} }];
       }
 
       const response = await ai.models.generateContent({
         model: model,
-        contents: { parts },
+        contents: { parts: parts.length > 0 ? parts : [{ text: prompt }] },
         config: config,
       });
 
@@ -71,7 +79,7 @@ export class GeminiService {
 
       const candidate = response.candidates[0];
       
-      // Iterate through parts to find the image, as it might not be the first part
+      // Iterate through parts to find the image part as per guidelines
       for (const part of candidate.content.parts) {
         if (part.inlineData?.data) {
           return `data:image/png;base64,${part.inlineData.data}`;
@@ -79,7 +87,7 @@ export class GeminiService {
       }
 
       if (candidate.finishReason === 'SAFETY') {
-        throw new Error("Generation stopped by safety filters. Try changing your description.");
+        throw new Error("Generation was blocked by standard safety filters. Try adjusting your description.");
       } else if (candidate.finishReason === 'STOP' && !candidate.content.parts.some(p => p.inlineData)) {
         throw new Error("Generation stopped unexpectedly. Please try again.");
       }
