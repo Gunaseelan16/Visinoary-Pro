@@ -50,7 +50,7 @@ export class GeminiService {
           aspectRatio: aspectRatio,
           ...(model === ModelType.PRO && imageSize ? { imageSize: imageSize } : {}),
         },
-        // Unrestricted generation enabled via BLOCK_NONE
+        // Unrestricted generation enabled via BLOCK_NONE for all available categories
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -62,6 +62,7 @@ export class GeminiService {
       };
 
       if (model === ModelType.PRO) {
+        // Use google_search for image models as per SDK documentation for gemini-3-pro-image-preview
         config.tools = [{ google_search: {} }];
       }
 
@@ -71,22 +72,25 @@ export class GeminiService {
         config: config,
       });
 
-      if (!response.candidates?.[0]) {
+      const candidate = response.candidates?.[0];
+      if (!candidate) {
         throw new Error('Generation failed: The server returned no results.');
       }
 
-      const candidate = response.candidates[0];
-      
-      for (const part of candidate.content.parts) {
-        if (part.inlineData?.data) {
-          return `data:image/png;base64,${part.inlineData.data}`;
+      // Safe access using optional chaining to prevent Netlify build failures and runtime crashes
+      const responseParts = candidate.content?.parts;
+      if (responseParts) {
+        for (const part of responseParts) {
+          if (part.inlineData?.data) {
+            return `data:image/png;base64,${part.inlineData.data}`;
+          }
         }
       }
 
       if (candidate.finishReason === 'SAFETY') {
         throw new Error("Generation was blocked by standard safety filters. Try adjusting your description.");
-      } else if (candidate.finishReason === 'STOP' && !candidate.content.parts.some(p => p.inlineData)) {
-        throw new Error("Generation stopped unexpectedly. Please try again.");
+      } else if (candidate.finishReason === 'STOP') {
+        throw new Error("Generation stopped unexpectedly without producing an image. Please try again.");
       }
 
       throw new Error(`Error: ${candidate.finishReason || 'Unknown issue'}`);
