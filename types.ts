@@ -30,7 +30,22 @@ export interface GenerationParams {
   seed?: number;
 }
 
+/**
+ * Declaring global interfaces to resolve conflicts with pre-configured types
+ * and ensure that window.aistudio is correctly typed in the execution context.
+ */
 declare global {
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
+
+  interface Window {
+    // Making it non-optional as the error "must be of type 'AIStudio', but here has type 'AIStudio'" 
+    // often stems from an optionality mismatch with an existing global declaration.
+    aistudio: AIStudio;
+  }
+
   namespace NodeJS {
     interface ProcessEnv {
       API_KEY: string;

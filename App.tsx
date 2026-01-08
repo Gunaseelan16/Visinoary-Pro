@@ -83,9 +83,25 @@ const App: React.FC = () => {
     e.target.value = '';
   };
 
+  const handleOpenKeySelection = async () => {
+    if (window.aistudio) {
+      await window.aistudio.openSelectKey();
+      // Assume success after triggering the dialog to mitigate race conditions
+      setError(null);
+    }
+  };
+
   const handleGenerate = async () => {
     if (cooldownSeconds > 0) return;
     
+    // MANDATORY: Check if key is selected for Pro models
+    if (selectedModel === ModelType.PRO && window.aistudio) {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        await handleOpenKeySelection();
+      }
+    }
+
     if (!prompt.trim() && uploadedImages.length === 0) {
       setError('Please enter a description or upload an image.');
       return;
@@ -115,10 +131,10 @@ const App: React.FC = () => {
 
       setImages(prev => [newImage, ...prev]);
 
-      // Auto-download result
+      // Download triggered on success
       const link = document.createElement('a');
       link.href = resultUrl;
-      link.download = `Generated_${newImage.id}.png`;
+      link.download = `Visionary_${newImage.id}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -128,11 +144,15 @@ const App: React.FC = () => {
     } catch (err: any) {
       const msg = err?.message || 'The image generator encountered an error.';
       
-      if (msg.includes('API key not valid') || msg.includes('403') || msg.includes('API Key Missing')) {
-        setError('API authentication failed. Please check your deployment environment variables.');
+      if (msg.includes('Requested entity was not found.')) {
+        setError('Selected project or key was not found. Please select a valid key from a PAID GCP project.');
+        await handleOpenKeySelection();
+      } else if (msg.includes('API key not valid') || msg.includes('403') || msg.includes('401')) {
+        setError('Authentication failed. High Quality mode requires a valid paid API key selection.');
+        await handleOpenKeySelection();
       } else if (msg.includes('429')) {
-        setError('System is busy (Rate Limit). Please wait a moment...');
-        setCooldownSeconds(30);
+        setError('Rate limit reached. Please wait a moment before trying again.');
+        setCooldownSeconds(20);
       } else {
         setError(msg);
       }
@@ -165,7 +185,10 @@ const App: React.FC = () => {
             </button>
             <button 
               disabled={isGenerating}
-              onClick={() => setSelectedModel(ModelType.PRO)} 
+              onClick={() => {
+                setSelectedModel(ModelType.PRO);
+                handleOpenKeySelection();
+              }} 
               className={`px-8 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${selectedModel === ModelType.PRO ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-white hover:bg-white/5'} disabled:opacity-50`}
             >
               High Quality
@@ -238,6 +261,12 @@ const App: React.FC = () => {
                   <button onClick={() => setError(null)} className="text-zinc-500 hover:text-white"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                 </div>
                 <p className="text-sm text-zinc-200 leading-relaxed font-semibold">{error}</p>
+                <button 
+                  onClick={handleOpenKeySelection}
+                  className="mt-4 text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline"
+                >
+                  Change API Key
+                </button>
               </div>
             )}
 
@@ -251,6 +280,22 @@ const App: React.FC = () => {
               >
                 {cooldownSeconds > 0 ? `Wait ${cooldownSeconds}s` : 'Generate Image'}
               </Button>
+              
+              {selectedModel === ModelType.PRO && (
+                <div className="text-center space-y-2">
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
+                    High Quality requires a paid project key
+                  </p>
+                  <a 
+                    href="https://ai.google.dev/gemini-api/docs/billing" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-blue-500 hover:underline transition-colors uppercase font-black tracking-widest"
+                  >
+                    View Billing Documentation
+                  </a>
+                </div>
+              )}
             </div>
           </section>
 

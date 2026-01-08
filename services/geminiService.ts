@@ -22,13 +22,16 @@ export class GeminiService {
     const { prompt, aspectRatio, model, imageSize, images, seed } = params;
 
     return this.withRetry(async () => {
+      // MANDATORY: Obtain API key exclusively from process.env.API_KEY
       const apiKey = process.env.API_KEY;
       
       if (!apiKey || apiKey.trim() === '') {
-        throw new Error("API Key Missing: Please ensure the API_KEY environment variable is set in your deployment.");
+        throw new Error("API Key Missing: Please ensure a valid API key is selected via the key selection dialog.");
       }
 
+      // MANDATORY: Create a new GoogleGenAI instance right before the call
       const ai = new GoogleGenAI({ apiKey });
+      
       const parts: any[] = [];
       
       if (images && images.length > 0) {
@@ -50,7 +53,7 @@ export class GeminiService {
           aspectRatio: aspectRatio,
           ...(model === ModelType.PRO && imageSize ? { imageSize: imageSize } : {}),
         },
-        // Unrestricted generation enabled via BLOCK_NONE for all available categories
+        // UNRESTRICTED: Set all safety thresholds to BLOCK_NONE
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -62,7 +65,6 @@ export class GeminiService {
       };
 
       if (model === ModelType.PRO) {
-        // Use google_search for image models as per SDK documentation for gemini-3-pro-image-preview
         config.tools = [{ google_search: {} }];
       }
 
@@ -77,7 +79,7 @@ export class GeminiService {
         throw new Error('Generation failed: The server returned no results.');
       }
 
-      // Safe access using optional chaining to prevent Netlify build failures and runtime crashes
+      // Iterate through parts to find the image part
       const responseParts = candidate.content?.parts;
       if (responseParts) {
         for (const part of responseParts) {
@@ -88,9 +90,9 @@ export class GeminiService {
       }
 
       if (candidate.finishReason === 'SAFETY') {
-        throw new Error("Generation was blocked by standard safety filters. Try adjusting your description.");
+        throw new Error("Generation was unexpectedly blocked by a filter. Try rephrasing your prompt.");
       } else if (candidate.finishReason === 'STOP') {
-        throw new Error("Generation stopped unexpectedly without producing an image. Please try again.");
+        throw new Error("The model stopped generating before completion. Please try again.");
       }
 
       throw new Error(`Error: ${candidate.finishReason || 'Unknown issue'}`);
