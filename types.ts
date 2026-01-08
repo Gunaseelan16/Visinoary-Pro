@@ -41,9 +41,9 @@ declare global {
   }
 
   interface Window {
-    // Making it non-optional as the error "must be of type 'AIStudio', but here has type 'AIStudio'" 
-    // often stems from an optionality mismatch with an existing global declaration.
-    aistudio: AIStudio;
+    // Set as optional to avoid "identical modifiers" conflict with existing environment declarations.
+    // This allows the local type extension to coexist with the pre-configured environment types.
+    aistudio?: AIStudio;
   }
 
   namespace NodeJS {

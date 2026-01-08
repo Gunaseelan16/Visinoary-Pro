@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { GenerationParams, ModelType } from "../types";
 
@@ -22,30 +23,33 @@ export class GeminiService {
     const { prompt, aspectRatio, model, imageSize, images, seed } = params;
 
     return this.withRetry(async () => {
-      // MANDATORY: Obtain API key exclusively from process.env.API_KEY
+      // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+      // It is injected automatically by the runtime environment.
       const apiKey = process.env.API_KEY;
       
       if (!apiKey || apiKey.trim() === '') {
-        throw new Error("API Key Missing: Please ensure a valid API key is selected via the key selection dialog.");
+        throw new Error("API Authentication Failed: No API key found in the environment. Please ensure you have selected a key using the 'High Quality' toggle or the key selection dialog.");
       }
 
-      // MANDATORY: Create a new GoogleGenAI instance right before the call
+      // Create a new GoogleGenAI instance right before making the API call
       const ai = new GoogleGenAI({ apiKey });
       
       const parts: any[] = [];
       
+      // Handle reference images
       if (images && images.length > 0) {
         images.forEach(img => parts.push({ 
           inlineData: { data: img.data, mimeType: img.mimeType } 
         }));
       }
       
+      // Handle prompt text
       if (prompt.trim()) {
         parts.push({ text: prompt });
       } else if (parts.length > 0) {
-        parts.push({ text: "Enhance and generate a high-quality image based on these references." });
+        parts.push({ text: "Please generate a high-quality image based on the provided visual references." });
       } else {
-        throw new Error("Input required: Please provide a description or image.");
+        throw new Error("Input required: Please provide a description or upload an image.");
       }
 
       const config: any = {
@@ -53,7 +57,7 @@ export class GeminiService {
           aspectRatio: aspectRatio,
           ...(model === ModelType.PRO && imageSize ? { imageSize: imageSize } : {}),
         },
-        // UNRESTRICTED: Set all safety thresholds to BLOCK_NONE
+        // Unrestricted generation: set all safety filters to BLOCK_NONE
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -64,22 +68,23 @@ export class GeminiService {
         ...(seed !== undefined ? { seed: seed } : {}),
       };
 
+      // Google Search tool is only available for gemini-3-pro-image-preview
       if (model === ModelType.PRO) {
         config.tools = [{ google_search: {} }];
       }
 
       const response = await ai.models.generateContent({
         model: model,
-        contents: { parts: parts.length > 0 ? parts : [{ text: prompt }] },
+        contents: { parts: parts },
         config: config,
       });
 
       const candidate = response.candidates?.[0];
       if (!candidate) {
-        throw new Error('Generation failed: The server returned no results.');
+        throw new Error('Generation failed: The model returned an empty response.');
       }
 
-      // Iterate through parts to find the image part
+      // Find the image part in the response (do not assume it is the first part)
       const responseParts = candidate.content?.parts;
       if (responseParts) {
         for (const part of responseParts) {
@@ -89,13 +94,12 @@ export class GeminiService {
         }
       }
 
+      // Handle cases where no image was returned (e.g., safety block despite settings)
       if (candidate.finishReason === 'SAFETY') {
-        throw new Error("Generation was unexpectedly blocked by a filter. Try rephrasing your prompt.");
-      } else if (candidate.finishReason === 'STOP') {
-        throw new Error("The model stopped generating before completion. Please try again.");
+        throw new Error("The request was blocked by internal safety filters. Try a different prompt.");
       }
 
-      throw new Error(`Error: ${candidate.finishReason || 'Unknown issue'}`);
+      throw new Error(`Generation error: ${candidate.finishReason || 'No image data returned.'}`);
     });
   }
 }

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { ASPECT_RATIOS, LogoIcon, SparklesIcon, UploadIcon, HistoryIcon, TrashIcon } from './constants';
 import { geminiService } from './services/geminiService';
@@ -85,20 +86,26 @@ const App: React.FC = () => {
 
   const handleOpenKeySelection = async () => {
     if (window.aistudio) {
-      await window.aistudio.openSelectKey();
-      // Assume success after triggering the dialog to mitigate race conditions
-      setError(null);
+      try {
+        await window.aistudio.openSelectKey();
+        setError(null);
+      } catch (e) {
+        setError("Failed to open the key selection dialog.");
+      }
+    } else {
+      setError("Key selection is not available in this environment. This application requires the AI Studio environment to manage API keys.");
     }
   };
 
   const handleGenerate = async () => {
     if (cooldownSeconds > 0) return;
     
-    // MANDATORY: Check if key is selected for Pro models
-    if (selectedModel === ModelType.PRO && window.aistudio) {
+    // Check key selection for models that require a paid key
+    if (window.aistudio) {
       const hasKey = await window.aistudio.hasSelectedApiKey();
       if (!hasKey) {
         await handleOpenKeySelection();
+        // Continue to attempt generation anyway as per race condition mitigation rules
       }
     }
 
@@ -131,7 +138,7 @@ const App: React.FC = () => {
 
       setImages(prev => [newImage, ...prev]);
 
-      // Download triggered on success
+      // Simple auto-download on success
       const link = document.createElement('a');
       link.href = resultUrl;
       link.download = `Visionary_${newImage.id}.png`;
@@ -145,13 +152,13 @@ const App: React.FC = () => {
       const msg = err?.message || 'The image generator encountered an error.';
       
       if (msg.includes('Requested entity was not found.')) {
-        setError('Selected project or key was not found. Please select a valid key from a PAID GCP project.');
+        setError('Authentication Failed: The selected key or project was not found. Please select a valid key from a paid GCP project.');
         await handleOpenKeySelection();
-      } else if (msg.includes('API key not valid') || msg.includes('403') || msg.includes('401')) {
-        setError('Authentication failed. High Quality mode requires a valid paid API key selection.');
+      } else if (msg.includes('API Key Missing') || msg.includes('403') || msg.includes('401')) {
+        setError('API Authentication Failed. High Quality mode requires a paid billing account and a valid selected API key.');
         await handleOpenKeySelection();
       } else if (msg.includes('429')) {
-        setError('Rate limit reached. Please wait a moment before trying again.');
+        setError('Rate limit exceeded. Please wait a moment before trying again.');
         setCooldownSeconds(20);
       } else {
         setError(msg);
@@ -208,7 +215,7 @@ const App: React.FC = () => {
               <textarea 
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="What would you like to create?"
+                placeholder="Describe your vision..."
                 className="w-full bg-black/40 border border-white/10 rounded-[2rem] p-8 text-base text-zinc-100 placeholder:text-zinc-800 focus:ring-4 focus:ring-blue-600/20 outline-none min-h-[160px] transition-all resize-none leading-relaxed shadow-inner"
               />
             </div>
@@ -261,12 +268,14 @@ const App: React.FC = () => {
                   <button onClick={() => setError(null)} className="text-zinc-500 hover:text-white"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                 </div>
                 <p className="text-sm text-zinc-200 leading-relaxed font-semibold">{error}</p>
-                <button 
-                  onClick={handleOpenKeySelection}
-                  className="mt-4 text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline"
-                >
-                  Change API Key
-                </button>
+                {window.aistudio && (
+                  <button 
+                    onClick={handleOpenKeySelection}
+                    className="mt-4 text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline"
+                  >
+                    Select New API Key
+                  </button>
+                )}
               </div>
             )}
 
@@ -284,7 +293,7 @@ const App: React.FC = () => {
               {selectedModel === ModelType.PRO && (
                 <div className="text-center space-y-2">
                   <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
-                    High Quality requires a paid project key
+                    High Quality mode requires a paid billing project
                   </p>
                   <a 
                     href="https://ai.google.dev/gemini-api/docs/billing" 
@@ -300,15 +309,15 @@ const App: React.FC = () => {
           </section>
 
           <section className="bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-10 hidden lg:block">
-            <h3 className="text-[11px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-6">Settings Information</h3>
+            <h3 className="text-[11px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-6">Environment Status</h3>
             <div className="space-y-5 text-xs text-zinc-600 font-bold">
               <div className="flex items-center gap-4">
                 <div className={`w-2 h-2 rounded-full ${cooldownSeconds > 0 ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`}></div>
-                <p>Engine: {selectedModel === ModelType.FLASH ? 'Fast Mode' : 'High Quality Mode'}</p>
+                <p>Model: {selectedModel === ModelType.FLASH ? 'Fast (2.5 Flash)' : 'High Quality (3 Pro)'}</p>
               </div>
               <div className="flex items-center gap-4">
-                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                <p>Security: Unrestricted Creative Mode</p>
+                <div className={`w-2 h-2 rounded-full ${window.aistudio ? 'bg-blue-500' : 'bg-red-500'}`}></div>
+                <p>Auth: {window.aistudio ? 'AI Studio Environment Detected' : 'Limited Mode (Local Env)'}</p>
               </div>
             </div>
           </section>
@@ -325,13 +334,13 @@ const App: React.FC = () => {
               <div className="bg-white/[0.03] rounded-[3rem] aspect-square flex flex-col items-center justify-center space-y-10 border border-blue-600/30 shimmer order-first">
                 <div className="w-16 h-16 border-4 border-zinc-900 border-t-blue-600 rounded-full animate-spin"></div>
                 <div className="text-center">
-                  <p className="text-sm font-black uppercase tracking-[0.6em] text-white animate-pulse">Generating image...</p>
+                  <p className="text-sm font-black uppercase tracking-[0.6em] text-white animate-pulse">Processing vision...</p>
                 </div>
               </div>
             )}
             {filteredImages.length === 0 && !isGenerating && (
               <div className="col-span-full h-96 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-[3rem] opacity-30">
-                <p className="text-sm font-black uppercase tracking-[0.5em]">No images in your gallery</p>
+                <p className="text-sm font-black uppercase tracking-[0.5em]">Gallery is empty</p>
               </div>
             )}
             {filteredImages.map((img) => (
@@ -339,7 +348,7 @@ const App: React.FC = () => {
                 key={img.id} 
                 image={img} 
                 onDelete={(id) => setImages(prev => prev.filter(x => x.id !== id))}
-                onDownload={(url) => { const l = document.createElement('a'); l.href = url; l.download = `Generated_${Date.now()}.png`; l.click(); }}
+                onDownload={(url) => { const l = document.createElement('a'); l.href = url; l.download = `Visionary_${Date.now()}.png`; l.click(); }}
                 onSelect={setSelectedPreview}
               />
             ))}
@@ -359,7 +368,7 @@ const App: React.FC = () => {
             <div className="mt-12 text-center max-w-2xl">
               <p className="text-sm font-black uppercase tracking-[0.4em] text-zinc-500 mb-8">{selectedPreview.prompt}</p>
               <div className="flex justify-center gap-6">
-                <Button onClick={() => { const l = document.createElement('a'); l.href = selectedPreview.url; l.download = `Generated_${selectedPreview.id}.png`; l.click(); }} className="h-16 px-16 rounded-[1.5rem] font-black uppercase tracking-[0.4em]">Download Image</Button>
+                <Button onClick={() => { const l = document.createElement('a'); l.href = selectedPreview.url; l.download = `Visionary_${selectedPreview.id}.png`; l.click(); }} className="h-16 px-16 rounded-[1.5rem] font-black uppercase tracking-[0.4em]">Download</Button>
                 <Button variant="secondary" onClick={() => setSelectedPreview(null)} className="h-16 px-12 rounded-[1.5rem] font-black uppercase tracking-[0.4em]">Close</Button>
               </div>
             </div>
