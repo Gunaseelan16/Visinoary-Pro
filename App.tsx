@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { ASPECT_RATIOS, LogoIcon, SparklesIcon, UploadIcon, HistoryIcon, TrashIcon } from './constants';
 import { geminiService } from './services/geminiService';
@@ -22,16 +21,6 @@ const App: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
-  const [hasApiKey, setHasApiKey] = useState(false);
-
-  // Check for existing API key selection on mount
-  useEffect(() => {
-    const checkApiKey = async () => {
-      const selected = await window.aistudio.hasSelectedApiKey();
-      setHasApiKey(selected);
-    };
-    checkApiKey();
-  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('visionary_image_gallery');
@@ -94,23 +83,9 @@ const App: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleOpenKeyDialog = async () => {
-    await window.aistudio.openSelectKey();
-    // Assume success after opening dialog as per guidelines to avoid race condition
-    setHasApiKey(true);
-  };
-
   const handleGenerate = async () => {
     if (cooldownSeconds > 0) return;
     
-    // Mandatory key selection for PRO model before generation
-    if (selectedModel === ModelType.PRO && !hasApiKey) {
-      const stillNoKey = !(await window.aistudio.hasSelectedApiKey());
-      if (stillNoKey) {
-        await handleOpenKeyDialog();
-      }
-    }
-
     if (!prompt.trim() && uploadedImages.length === 0) {
       setError('Please enter a description or upload an image.');
       return;
@@ -153,13 +128,8 @@ const App: React.FC = () => {
     } catch (err: any) {
       const msg = err?.message || 'The image generator encountered an error.';
       
-      // If project not found, prompt for key selection again
-      if (msg.includes('Requested entity was not found.')) {
-        setError('Requested project or API key was not found. Please select a valid key from a paid GCP project.');
-        setHasApiKey(false);
-        await handleOpenKeyDialog();
-      } else if (msg.includes('API key not valid') || msg.includes('403') || msg.includes('API Key Missing')) {
-        setError('API authentication failed. Pro mode requires a valid paid API key.');
+      if (msg.includes('API key not valid') || msg.includes('403') || msg.includes('API Key Missing')) {
+        setError('API authentication failed. Please check your deployment environment variables.');
       } else if (msg.includes('429')) {
         setError('System is busy (Rate Limit). Please wait a moment...');
         setCooldownSeconds(30);
@@ -272,30 +242,15 @@ const App: React.FC = () => {
             )}
 
             <div className="space-y-4">
-              {selectedModel === ModelType.PRO && !hasApiKey ? (
-                <div className="space-y-4">
-                  <Button 
-                    onClick={handleOpenKeyDialog}
-                    className="w-full h-20 rounded-[2.5rem] text-sm font-black uppercase tracking-[0.2em] bg-blue-600 hover:bg-blue-500 text-white shadow-[0_20px_50px_-10px_rgba(37,99,235,0.4)]"
-                  >
-                    Select Paid API Key
-                  </Button>
-                  <p className="text-[10px] text-center text-zinc-500 font-bold uppercase tracking-widest">
-                    A paid GCP project key is required for Pro. <br/>
-                    <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">View Billing Setup</a>
-                  </p>
-                </div>
-              ) : (
-                <Button 
-                  onClick={handleGenerate} 
-                  isLoading={isGenerating} 
-                  disabled={cooldownSeconds > 0}
-                  className={`w-full h-20 rounded-[2.5rem] text-base font-black uppercase tracking-[0.5em] shadow-[0_20px_50px_-10px_rgba(37,99,235,0.4)] transition-all active:scale-[0.97] ${cooldownSeconds > 0 ? 'bg-zinc-800 text-zinc-500 border border-white/5 shadow-none' : ''}`} 
-                  variant={selectedModel === ModelType.PRO ? 'primary' : 'secondary'}
-                >
-                  {cooldownSeconds > 0 ? `Wait ${cooldownSeconds}s` : 'Generate Image'}
-                </Button>
-              )}
+              <Button 
+                onClick={handleGenerate} 
+                isLoading={isGenerating} 
+                disabled={cooldownSeconds > 0}
+                className={`w-full h-20 rounded-[2.5rem] text-base font-black uppercase tracking-[0.5em] shadow-[0_20px_50px_-10px_rgba(37,99,235,0.4)] transition-all active:scale-[0.97] ${cooldownSeconds > 0 ? 'bg-zinc-800 text-zinc-500 border border-white/5 shadow-none' : ''}`} 
+                variant={selectedModel === ModelType.PRO ? 'primary' : 'secondary'}
+              >
+                {cooldownSeconds > 0 ? `Wait ${cooldownSeconds}s` : 'Generate Image'}
+              </Button>
             </div>
           </section>
 

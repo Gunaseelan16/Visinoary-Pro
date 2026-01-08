@@ -1,4 +1,3 @@
-
 export type AspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
 export type ImageSize = '1K' | '2K' | '4K';
 
@@ -31,26 +30,11 @@ export interface GenerationParams {
   seed?: number;
 }
 
-// Interface for AIStudio global object to match environment definitions
-export interface AIStudio {
-  hasSelectedApiKey: () => Promise<boolean>;
-  openSelectKey: () => Promise<void>;
-}
-
 declare global {
-  interface Window {
-    // Fixed aistudio type from 'any' to 'AIStudio' to resolve type collision errors
-    aistudio: AIStudio;
-  }
-
   namespace NodeJS {
     interface ProcessEnv {
       API_KEY: string;
       [key: string]: string | undefined;
-    }
-    // Removed cwd() as it is already provided by @types/node and causes duplicate identifier errors
-    interface Process {
-      env: ProcessEnv;
     }
   }
 }

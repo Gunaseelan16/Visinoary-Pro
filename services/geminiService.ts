@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { GenerationParams, ModelType } from "../types";
 
@@ -23,11 +22,10 @@ export class GeminiService {
     const { prompt, aspectRatio, model, imageSize, images, seed } = params;
 
     return this.withRetry(async () => {
-      // Create a new instance right before making an API call to ensure it uses the most up-to-date API key
       const apiKey = process.env.API_KEY;
       
       if (!apiKey || apiKey.trim() === '') {
-        throw new Error("API Key Missing: Please ensure the environment is configured correctly.");
+        throw new Error("API Key Missing: Please ensure the API_KEY environment variable is set in your deployment.");
       }
 
       const ai = new GoogleGenAI({ apiKey });
@@ -52,18 +50,18 @@ export class GeminiService {
           aspectRatio: aspectRatio,
           ...(model === ModelType.PRO && imageSize ? { imageSize: imageSize } : {}),
         },
-        // Use standard safety categories provided by the SDK
+        // Unrestricted generation enabled via BLOCK_NONE
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' }
         ],
         ...(seed !== undefined ? { seed: seed } : {}),
       };
 
       if (model === ModelType.PRO) {
-        // Use google_search tool for gemini-3-pro-image-preview
         config.tools = [{ google_search: {} }];
       }
 
@@ -79,7 +77,6 @@ export class GeminiService {
 
       const candidate = response.candidates[0];
       
-      // Iterate through parts to find the image part as per guidelines
       for (const part of candidate.content.parts) {
         if (part.inlineData?.data) {
           return `data:image/png;base64,${part.inlineData.data}`;
